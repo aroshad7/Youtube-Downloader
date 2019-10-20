@@ -6,10 +6,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 import bs4
-import time, os, sys
+import time, os, sys, string
 
+#Vaild characters for file name creation
+valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
 
-def get_playlist_videos(url, resolution):
+#######################################################################################################################################################################################################################################################
+def get_playlist_videos(url, resolution, aquire_wait_time, starting_video, ending_video):
     # --------------------------
     # Start Browser Service
     # --------------------------
@@ -22,11 +25,13 @@ def get_playlist_videos(url, resolution):
         driver.implicitly_wait(3)
     except:
         print("Error occurred. Probably the chromedriver is missing. Keep the executable chromedriver file in the same directory as the Youtube Downloader!")
-        sys.exit();
+        while(1):
+        	time.sleep(1)
 
     # --------------------------
     # Go to Playlist Page
     # --------------------------
+    print("Indexing video list...")
     list_url = 'https://www.youtube.com/playlist?list=' + url[(url.index("list=")+5):]
     driver.get(list_url)
     time.sleep(3)
@@ -44,9 +49,8 @@ def get_playlist_videos(url, resolution):
         except:
             there_is_more_to_load = False
 
-    # WARNING: sometimes page loads w/o load more button and refresh is based on scrolling
     # --------------------------
-    # Get Source Code
+    # Get Page Source
     # --------------------------
     page = bs4.BeautifulSoup(driver.page_source, 'html.parser')
 
@@ -63,43 +67,73 @@ def get_playlist_videos(url, resolution):
     for video in last_div:
         name_list.append(video.find_all("span", id="video-title")[0].text[17:-15])
         yt_link_list.append("http://ssyoutube.com" + video.find_all("a")[0]['href'])
+    starting_video = int(starting_video) - 1
+    ending_video = int(ending_video)
+    if ending_video > len(name_list):
+    	ending_video = len(name_list)
 
-    for i in range(len(name_list)):
-        try:
-            print("Acquiring video: " + name_list[i])
-            driver.get(yt_link_list[i])
-            time.sleep(15)
-            ss_link_list.append(bs4.BeautifulSoup(driver.page_source, 'html.parser').find_all("a", {"title": "video format: " + resolution})[0]['href'])
-        except KeyboardInterrupt:
-            ss_link_list.append("");
-            print("Skipping...")
-            continue
-        except Exception:
-            ss_link_list.append("");
-            print("Acquiring failed! Resolution might not be available.")
-
+    for i in range(0, len(name_list)):
+        if (i>=starting_video) and (i<ending_video):                
+            try:
+                print("Acquiring video: " + name_list[i])
+                driver.get(yt_link_list[i])
+                time.sleep(int(aquire_wait_time))
+                ss_link_list.append(bs4.BeautifulSoup(driver.page_source, 'html.parser').find_all("a", {"title": "video format: " + resolution})[0]['href'])
+            except KeyboardInterrupt:
+                ss_link_list.append("");
+                print("Skipping...")
+                continue
+            except Exception:
+                ss_link_list.append("");
+                print("Acquiring failed! Resolution might not be available.")
+        else:
+            ss_link_list.append("")
 
     driver.close()
-    return list_name, name_list, ss_link_list
+    return list_name, name_list, ss_link_list, starting_video, ending_video
+#######################################################################################################################################################################################################################################################
+#######################################################################################################################################################################################################################################################
+def get_download_path():
+    """Returns the default downloads path for linux or windows"""
+    try:
+        if os.name == 'nt':
+            import winreg
+            sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+            downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+                location = winreg.QueryValueEx(key, downloads_guid)[0]
+            return location
+        else:
+            return os.path.join(os.path.expanduser('~'), 'downloads')
+    except Exception:
+            return ""
+#######################################################################################################################################################################################################################################################
 
-
-title, name_list, link_list = get_playlist_videos(input("Enter playlist URL: "), input("Enter required resolution: "))
-
+title, name_list, link_list, start, end = get_playlist_videos(input("Enter playlist URL: "), input("Enter required resolution: "), input("Enter wait time for acquiring: "), input("Starting video number: "), input("Ending video number: "))
+downloads_path = ""
+	
 try:
     original_umask = os.umask(0)
-    os.makedirs(title, 0o777)
-except Exception:
+    title = ''.join(c for c in title if c in valid_chars)
+    downloads_path = get_download_path() + "/" + title
+    os.makedirs(downloads_path, 0o777)
+except Exception as e:
+    print("Folder creating problem: " + str(e))
     pass
 finally:
     os.umask(original_umask)
 
-for i in range(len(name_list)):
+for i in range(start, end):
     print("Downloading: " + name_list[i])
     try:
-        urllib.request.urlretrieve(link_list[i], title + "/" + name_list[i] + ".mp4")
+        urllib.request.urlretrieve(link_list[i], downloads_path + "/" + ''.join(c for c in name_list[i] if c in valid_chars) + ".mp4")
     except KeyboardInterrupt:
         print("Skipping...")
         continue
     except Exception as e:
-        print("Error occurred: " + e + "/nSkipping...")
+        print("Error occurred: " + str(e) + "\nSkipping...")
 
+
+print("Downloading completed")
+while(1):
+	time.sleep(1)
