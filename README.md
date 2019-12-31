@@ -4,6 +4,7 @@ This is a chrome driver based youtube video downloader with the help of savefrom
 
   - Requires python 3, Selenium and Beautifulsoup.
   - Chrome driver executable should be placed in the same folder as the Youtube Downloader executable.
+  - If the application continuously reports of a chrome driver missing, download the latest chrome driver version and replace the old one.
   - For linux use the respective Chrome driver.
   - Do not close the auto opening chrome window. The downloader will close it automatically when aquiring is completed.
   - You can use pyinstaller to create the executable for both linux and windows.
